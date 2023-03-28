@@ -14,8 +14,8 @@ class optitrack(mp_module.MPModule):
         """Initialise module"""
         super(optitrack, self).__init__(mpstate, "optitrack", "optitrack")
         self.optitrack_settings = mp_settings.MPSettings(
-            [('server', str, '127.0.0.1'),
-            ('client', str, '127.0.0.1'),
+            [('server', str, '192.168.0.100'),#'127.0.0.1'),
+            ('client', str, '192.168.0.104'),#'127.0.0.1'),
             ('msg_intvl_ms', int, 75),
             ('obj_id', int, 1)]
         )
