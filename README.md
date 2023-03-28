@@ -2,6 +2,8 @@
 
 MAVProxy
 
+FORKED BY ASZ for GALCIT's OptiTrack version.
+
 This is a MAVLink ground station written in python. 
 
 Please see https://ardupilot.org/mavproxy/index.html for more information
