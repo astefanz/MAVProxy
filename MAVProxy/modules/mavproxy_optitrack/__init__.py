@@ -19,20 +19,27 @@ class optitrack(mp_module.MPModule):
             ('msg_intvl_ms', int, 75),
             ('obj_id', int, 1)]
         )
-        self.add_command('optitrack', self.cmd_optitrack, "optitrack control", ['<start>', 'set (OPTITRACKSETTING)'])
+        self.add_command('optitrack', self.cmd_optitrack, "optitrack control",
+            ['<start>', 'set (OPTITRACKSETTING)'])
         self.streaming_client = NatNetClient.NatNetClient()
-        # Configure the streaming client to call our rigid body handler on the emulator to send data out.
-        self.streaming_client.rigid_body_listener = self.receive_rigid_body_frame
+        # Configure the streaming client to call our rigid body handler on the
+        # emulator to send data out.
+        self.streaming_client.rigidBodyListener = self.receive_rigid_body_frame
         self.last_msg_time = 0
         self.started = False
 
-    # This is a callback function that gets connected to the NatNet client. It is called once per rigid body per frame
-    def receive_rigid_body_frame(self, new_id, position, rotation, tracking_valid):
-        if (tracking_valid and new_id == self.optitrack_settings.obj_id):
+    # This is a callback function that gets connected to the NatNet client.
+    # It is called once per rigid body per frame
+    # Removed "tracking_valid" as it's not in the CAST version
+    def receive_rigid_body_frame(self, new_id, position, rotation):#, tracking_valid):
+        if (new_id == self.optitrack_settings.obj_id):
             now = time.time()
             if (now - self.last_msg_time) > (self.optitrack_settings.msg_intvl_ms * 0.001):
                 time_us = int(now * 1.0e6)
-                self.master.mav.att_pos_mocap_send(time_us, (rotation[3], rotation[0], rotation[2], -rotation[1]), position[0], position[2], -position[1])
+                self.master.mav.att_pos_mocap_send(time_us,
+                    (rotation[3], rotation[0], rotation[2], -rotation[1]),
+                    position[0], position[2], -position[1])
+                print(time_us, position[0], position[2], -position[1])
                 self.last_msg_time = now
 
     def usage(self):
@@ -59,7 +66,7 @@ class optitrack(mp_module.MPModule):
     def idle_task(self):
         '''called rapidly by mavproxy'''
         if self.started:
-            self.streaming_client.process_data_and_cmd()
+            self.streaming_client.process_data_and_cmd() # TODO
 
 def init(mpstate):
     '''initialise module'''
