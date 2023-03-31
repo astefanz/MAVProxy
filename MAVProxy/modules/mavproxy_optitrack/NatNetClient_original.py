@@ -15,8 +15,6 @@
 # OptiTrack NatNet direct depacketization library for Python 3.x
 
 # modified by yuan-chu tai for mavproxy integration
-# Modified by astefanz for old NatNetClient used at CIT CAST integration
-# on 2023.03.31
 
 import socket
 import struct
@@ -57,13 +55,6 @@ NNIntValue = struct.Struct( '<I')
 FPCalMatrixRow = struct.Struct( '<ffffffffffff' )
 FPCorners      = struct.Struct( '<ffffffffffff')
 
-
-""" Changes To Do (ASZ)
-
-- force multicast mode
-
-"""
-
 class NatNetClient:
     # print_level = 0 off
     # print_level = 1 on
@@ -72,7 +63,7 @@ class NatNetClient:
     
     def __init__( self ):
         # Change this value to the IP address of the NatNet server.
-        self.server_ip_address = "192.168.0.100"#"127.0.0.1" ASZ
+        self.server_ip_address = "192.168.0.100"#"127.0.0.1"
 
         # Change this value to the IP address of your local network interface
         self.local_ip_address = "192.168.0.104"#"127.0.0.1"
@@ -175,7 +166,7 @@ class NatNetClient:
                 #turn off output
                 #self.set_print_results(False)
                 # force frame send and play reset
-                self.send_c("TimelinePlay")
+                self.send_command("TimelinePlay")
                 time.sleep(0.1)
                 tmpCommands=["TimelinePlay",
                     "TimelineStop",
@@ -223,25 +214,108 @@ class NatNetClient:
 
     # Create a command socket to attach to the NatNet stream
     def __create_command_socket( self):
-        """ Ripped from CAST-compatible version """
-        result = socket.socket( socket.AF_INET, socket.SOCK_DGRAM )
-        result.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        result.bind( ('', 0) )
-        result.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        result = None
+        if self.use_multicast :
+            # Multicast case
+            result = socket.socket( socket.AF_INET, socket.SOCK_DGRAM, 0 )
+            # allow multiple clients on same machine to use multicast group address/port
+            result.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                result.bind( ('', 0) )
+            except socket.error as msg:
+                print("ERROR: command socket error occurred:\n%s" %msg)
+                print("Check Motive/Server mode requested mode agreement.  You requested Multicast ")
+                result = None
+            except  socket.herror:
+                print("ERROR: command socket herror occurred")
+                result = None
+            except  socket.gaierror:
+                print("ERROR: command socket gaierror occurred")
+                result = None
+            except  socket.timeout:
+                print("ERROR: command socket timeout occurred. Server not responding")
+                result = None
+            # set to broadcast mode
+            result.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            # set timeout to allow for keep alive messages
+            result.settimeout(2.0)
+        else:
+            # Unicast case
+            result = socket.socket( socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+            try:
+                result.bind( (self.local_ip_address, 0) )
+            except socket.error as msg:
+                print("ERROR: command socket error occurred:\n%s" %msg)
+                print("Check Motive/Server mode requested mode agreement.  You requested Unicast ")
+                result = None
+            except socket.herror:
+                print("ERROR: command socket herror occurred")
+                result = None
+            except socket.gaierror:
+                print("ERROR: command socket gaierror occurred")
+                result = None
+            except socket.timeout:
+                print("ERROR: command socket timeout occurred. Server not responding")
+                result = None
+
+            # set timeout to allow for keep alive messages
+            result.settimeout(2.0)
+            result.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         return result
 
     # Create a data socket to attach to the NatNet stream
     def __create_data_socket( self, port):
-        """ Ripped from CAST-compatible version """
-        result = socket.socket( socket.AF_INET,     # Internet
-                              socket.SOCK_DGRAM,
-                              socket.IPPROTO_UDP)    # UDP
-        result.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        result.bind( ('', port) )
+        result = None
 
-        mreq = struct.pack("4sl", socket.inet_aton(self.multicastAddress), socket.INADDR_ANY)
-        result.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        if self.use_multicast:
+            # Multicast case
+            result = socket.socket( socket.AF_INET,     # Internet
+                                  socket.SOCK_DGRAM,
+                                  0)    # UDP
+            result.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            result.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(self.multicast_address) + socket.inet_aton(self.local_ip_address))
+            try:
+                result.bind( (self.local_ip_address, port) )
+            except socket.error as msg:
+                print("ERROR: data socket error occurred:\n%s" %msg)
+                print("  Check Motive/Server mode requested mode agreement.  You requested Multicast ")
+                result = None
+            except socket.herror:
+                print("ERROR: data socket herror occurred")
+                result = None
+            except socket.gaierror:
+                print("ERROR: data socket gaierror occurred")
+                result = None
+            except socket.timeout:
+                print("ERROR: data socket timeout occurred. Server not responding")
+                result = None
+        else:
+            # Unicast case
+            result = socket.socket( socket.AF_INET,     # Internet
+                                  socket.SOCK_DGRAM,
+                                  socket.IPPROTO_UDP)
+            result.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            #result.bind( (self.local_ip_address, port) )
+            try:
+                result.bind( ('', 0) )
+            except socket.error as msg:
+                print("ERROR: data socket error occurred:\n%s" %msg)
+                print("Check Motive/Server mode requested mode agreement.  You requested Unicast ")
+                result = None
+            except socket.herror:
+                print("ERROR: data socket herror occurred")
+                result = None
+            except socket.gaierror:
+                print("ERROR: data socket gaierror occurred")
+                result = None
+            except socket.timeout:
+                print("ERROR: data socket timeout occurred. Server not responding")
+                result = None
+            
+            if(self.multicast_address != "255.255.255.255"):
+                result.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(self.multicast_address) + socket.inet_aton(self.local_ip_address))
+
         return result
 
     # Unpack a rigid body object from a data packet
